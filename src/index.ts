@@ -90,7 +90,7 @@ export class FileSystemStore<T> implements ICacheStore<T> {
         const ttl = JSON.parse(
           String(this.options.fs.readFileSync(ttlFilename))
         )
-        if (ttl < Date.now()) {
+        if (typeof ttl !== 'number' || ttl < Date.now()) {
           this.remove(key)
             .then(() => {
               resolve(undefined)
@@ -179,6 +179,59 @@ export class FileSystemStore<T> implements ICacheStore<T> {
       return Promise.reject(err)
     }
     return Promise.resolve(result)
+  }
+
+  /**
+   * 回收过期资源
+   * @example store():gc
+    ```js
+    (*<jdists import="?debug[desc='gc']" />*)
+    ```
+   * @example store():gc
+    ```js
+    (*<jdists import="?debug[desc='gc-coverage']" />*)
+    ```
+   */
+  gc(): Promise<string[]> {
+    let files: string[]
+    try {
+      files = this.options.fs.readdirSync(this.options.path)
+    } catch (err) {
+      return Promise.reject(err)
+    }
+    return Promise.all(
+      files
+        .filter(filename => path.extname(filename) === '.ttl')
+        .map(filename => {
+          return new Promise((resolve, reject) => {
+            try {
+              const ttl = JSON.parse(
+                String(
+                  this.options.fs.readFileSync(
+                    path.join(this.options.path, filename)
+                  )
+                )
+              )
+              if (typeof ttl !== 'number' || ttl < Date.now()) {
+                const key = path.basename(filename, '.ttl')
+                this.remove(key)
+                  .then(() => {
+                    resolve(key)
+                  })
+                  .catch(err => {
+                    reject(err)
+                  })
+              } else {
+                resolve(undefined)
+              }
+            } catch (err) {
+              reject(err)
+            }
+          })
+        })
+    ).then(reply => {
+      return reply.filter(item => !!item)
+    }) as any
   }
 }
 
@@ -364,4 +417,66 @@ store4.load('key4').catch(err => {
   console.error(err)
 })
 /*</debug>*/
+
+/*<debug desc="gc">*/
+/*<jdists>this.timeout(5000)</jdists>*/
+var store5 = new jfetchs.FileSystemStore({
+  debug: true,
+  path: '.jfetchs_cache',
+})
+
+store5.save('key5-1', 'data5-1', 1)
+store5.save('key5-2', 'data5-2', 2)
+setTimeout(() => {
+  store5.gc().then(reply => {
+    console.log(JSON.stringify(reply))
+    // > ["key5-1"]
+    // * done
+  })
+}, 1500)
+/*</debug>*/
+
+/*<debug desc="gc-coverage">*/
+/*<jdists>this.timeout(5000)</jdists>*/
+var fs5 = {
+  readFileSync: filename => {
+    throw `#error readFileSync ${filename}`
+  },
+  writeFileSync: filename => {
+    throw `#error writeFileSync ${filename}`
+  },
+  existsSync: filename => {
+    throw `#error existsSync ${filename}`
+  },
+  readdirSync: path => {
+    throw `#error readdirSync ${path}`
+  },
+} /*<remove>*/ as any /*</remove>*/
+var store5 = new jfetchs.FileSystemStore({
+  debug: true,
+  fs: fs5,
+  path: '.jfetchs_cache',
+})
+
+store5.gc().catch(err => {
+  console.error(err)
+})
+fs5.readdirSync = () => {
+  return ['1.ttl']
+}
+store5.gc().catch(err => {
+  console.error(err)
+})
+
+fs5.readdirSync = () => {
+  return ['1.ttl']
+}
+fs5.readFileSync = filename => {
+  return JSON.stringify(Date.now() - 10000)
+}
+store5.gc().catch(err => {
+  console.error(err)
+})
+/*</debug>*/
+
 /*</remove>*/

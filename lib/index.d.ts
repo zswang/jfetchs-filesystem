@@ -5,8 +5,8 @@ import { ICacheStore } from 'jfetchs-util';
  * jfetchs filesystem store
  * @author
  *   zswang (http://weibo.com/zswang)
- * @version 0.0.1
- * @date 2018-09-13
+ * @version 0.0.2
+ * @date 2018-09-15
  */
 export interface IFileSystemStoreOptions {
     /**
@@ -220,5 +220,67 @@ export declare class FileSystemStore<T> implements ICacheStore<T> {
      * @return 返回移除是否成功
      */
     remove(key: string): Promise<boolean>;
+    /**
+     * 回收过期资源
+     * @example store():gc
+      ```js
+      this.timeout(5000)
+  var store5 = new jfetchs.FileSystemStore({
+    debug: true,
+    path: '.jfetchs_cache',
+  })
+  store5.save('key5-1', 'data5-1', 1)
+  store5.save('key5-2', 'data5-2', 2)
+  setTimeout(() => {
+    store5.gc().then(reply => {
+      console.log(JSON.stringify(reply))
+      // > ["key5-1"]
+      // * done
+    })
+  }, 1500)
+      ```
+     * @example store():gc
+      ```js
+      this.timeout(5000)
+  var fs5 = {
+    readFileSync: filename => {
+      throw `#error readFileSync ${filename}`
+    },
+    writeFileSync: filename => {
+      throw `#error writeFileSync ${filename}`
+    },
+    existsSync: filename => {
+      throw `#error existsSync ${filename}`
+    },
+    readdirSync: path => {
+      throw `#error readdirSync ${path}`
+    },
+  }
+  var store5 = new jfetchs.FileSystemStore({
+    debug: true,
+    fs: fs5,
+    path: '.jfetchs_cache',
+  })
+  store5.gc().catch(err => {
+    console.error(err)
+  })
+  fs5.readdirSync = () => {
+    return ['1.ttl']
+  }
+  store5.gc().catch(err => {
+    console.error(err)
+  })
+  fs5.readdirSync = () => {
+    return ['1.ttl']
+  }
+  fs5.readFileSync = filename => {
+    return JSON.stringify(Date.now() - 10000)
+  }
+  store5.gc().catch(err => {
+    console.error(err)
+  })
+      ```
+     */
+    gc(): Promise<string[]>;
 }
 //# sourceMappingURL=index.d.ts.map
